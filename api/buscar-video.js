@@ -14,8 +14,8 @@ export default async function handler(req) {
       });
     }
 
-    const API_KEY = 'AIzaSyDsdUMRJMx6NIaylLQPMZKkye3-m8DQwH8'; // 🔁 Substituir pela sua chave da API YouTube
-    const buscaUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=6&videoEmbeddable=true&q=${encodeURIComponent(query + ' karaoke')}&key=${API_KEY}`;
+    const API_KEY = 'AIzaSyDsdUMRJMx6NIaylLQPMZKkye3-m8DQwH8';
+    const buscaUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&videoEmbeddable=true&maxResults=6&q=${encodeURIComponent(query + ' karaoke')}&key=${API_KEY}`;
 
     const buscaResp = await fetch(buscaUrl);
     const buscaJson = await buscaResp.json();
@@ -36,7 +36,6 @@ export default async function handler(req) {
       .filter(item =>
         item.status.embeddable &&
         item.status.privacyStatus === 'public' &&
-        item.snippet &&
         !item.snippet.liveBroadcastContent
       )
       .map(item => ({
@@ -53,7 +52,7 @@ export default async function handler(req) {
       });
     }
 
-    const melhor = candidatos.sort((a, b) => 
+    const melhor = candidatos.sort((a, b) =>
       (b.viewCount + b.likeCount) - (a.viewCount + a.likeCount)
     )[0];
 
@@ -66,7 +65,4 @@ export default async function handler(req) {
     console.error('Erro na busca:', err);
     return new Response(JSON.stringify({ error: 'Erro interno' }), {
       status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }
-}
+      headers: { 'Con
