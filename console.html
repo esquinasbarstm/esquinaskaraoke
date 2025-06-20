@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Console do Karaokê 🎶</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: #f0f2f5;
+      margin: 0;
+      padding: 20px;
+      color: #333;
+    }
+    h1 { margin-bottom: 20px; }
+    .fila, .musica-atual {
+      background: white;
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.1);
+      margin-bottom: 30px;
+    }
+    button {
+      padding: 10px 20px;
+      background: #ff0080;
+      border: none;
+      color: white;
+      font-weight: bold;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <h1>🎧 Console do Karaokê</h1>
+
+  <div class="musica-atual">
+    <h2>🎶 Tocando Agora</h2>
+    <p id="musicaAtual">Carregando...</p>
+    <button onclick="tocarProxima()">▶️ Tocar próxima da fila</button>
+  </div>
+
+  <div class="fila">
+    <h2>📜 Fila por Rodízio</h2>
+    <ol id="filaRodizio"></ol>
+  </div>
+
+  <!-- Firebase -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js"></script>
+
+  <script>
+    const firebaseConfig = {
+  apiKey: "AIzaSyA-12uLmsJocr0l7kPfDZb-ldjw702RfQA",
+  authDomain: "esquinaskaraokev1.firebaseapp.com",
+  projectId: "esquinaskaraokev1",
+  storageBucket: "esquinaskaraokev1.firebasestorage.app",
+  messagingSenderId: "194647687582",
+  appId: "1:194647687582:web:b40633b8af522f9e71968f"
+};
+    const app = firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    const filaEl = document.getElementById("filaRodizio");
+    const musicaAtualEl = document.getElementById("musicaAtual");
+
+    let filaRodizio = [];
+
+    // Função que organiza a fila por rodízio
+    async function organizarFila() {
+      const mesasSnap = await db.collection("mesas").get();
+      const mesas = [];
+
+      for (const doc of mesasSnap.docs) {
+        const mesaId = doc.id;
+        const musicasSnap = await db.collection("mesas").doc(mesaId).collection("suasMusicas").orderBy("dataHora").get();
+        const musicas = musicasSnap.docs.map(m => ({ ...m.data(), mesaId }));
+        if (musicas.length > 0) {
+          mesas.push({ mesaId, musicas });
+        }
+      }
+
+      // Organizar em rodízio de 2 por mesa
+      const rodizio = [];
+      for (let i = 0; i < 2; i++) {
+        mesas.forEach(mesa => {
+          if (mesa.musicas[i]) {
+            rodizio.push(mesa.musicas[i]);
+          }
+        });
+      }
+
+      filaRodizio = rodizio;
+      renderizarFila();
+      salvarFilaFirebase(rodizio);
+    }
+
+    // Exibir fila na tela
+    function renderizarFila() {
+      filaEl.innerHTML = "";
+      filaRodizio.forEach((m, i) => {
+        const li = document.createElement("li");
+        li.textContent = `${m.titulo} (${m.mesaId})`;
+        filaEl.appendChild(li);
+      });
+    }
+
+    // Salvar fila ordenada no Firestore
+    async function salvarFilaFirebase(fila) {
+      await db.collection("sistema").doc("filaOrdenada").set({ fila });
+    }
+
+    // Mostrar a música atual
+    function carregarMusicaAtual() {
+      db.collection("sistema").doc("musicaAtual").onSnapshot(doc => {
+        const m = doc.data();
+        if (m && m.titulo) {
+          musicaAtualEl.textContent = `${m.titulo} (${m.mesaId})`;
+        } else {
+          musicaAtualEl.textContent = "Nenhuma música tocando.";
+        }
+      });
+    }
+
+    // Tocar a próxima da fila
+    async function tocarProxima() {
+      if (filaRodizio.length === 0) return alert("Fila vazia!");
+
+      const proxima = filaRodizio.shift();
+
+      // Atualiza música atual
+      await db.collection("sistema").doc("musicaAtual").set(proxima);
+
+      // Remove do Firestore da mesa
+      const mesaRef = db.collection("mesas").doc(proxima.mesaId).collection("suasMusicas");
+      const snap = await mesaRef.where("youtubeId", "==", proxima.youtubeId).get();
+      snap.forEach(doc => doc.ref.delete());
+
+      // Atualiza fila salva e exibição
+      await salvarFilaFirebase(filaRodizio);
+      renderizarFila();
+    }
+
+    // Iniciar
+    carregarMusicaAtual();
+    organizarFila();
+    setInterval(organizarFila, 8000); // Atualiza a fila a cada 8s
+  </script>
+</body>
+</html>
