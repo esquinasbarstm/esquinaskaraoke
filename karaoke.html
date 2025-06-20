@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Karaokê – Esquina's Bar</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: #f2f2f2;
+      padding: 20px;
+      text-align: center;
+    }
+
+    input, button {
+      padding: 12px;
+      margin: 10px 0;
+      width: 100%;
+      max-width: 400px;
+      font-size: 16px;
+      border-radius: 8px;
+      border: 1px solid #ccc;
+    }
+
+    button {
+      background: #ff0080;
+      color: white;
+      border: none;
+      cursor: pointer;
+      font-weight: bold;
+    }
+
+    button:disabled {
+      background: #999;
+      cursor: not-allowed;
+    }
+
+    ul {
+      list-style: none;
+      padding: 0;
+      margin-top: 30px;
+    }
+
+    li {
+      background: white;
+      padding: 10px;
+      margin-bottom: 8px;
+      border-radius: 6px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+    }
+  </style>
+</head>
+<body>
+  <h1>🎤 Escolha sua música!</h1>
+  <input type="text" id="busca" placeholder="Digite o nome da música..." />
+  <button id="adicionarBtn" disabled>Adicionar Música</button>
+
+  <ul id="fila"></ul>
+
+  <!-- Firebase Modular -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+    import { getFirestore, collection, doc, query, orderBy, onSnapshot, addDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+    // Configuração Firebase
+    const firebaseConfig = {
+      apiKey: "AIzaSyA-12uLmsJocr0l7kPfDZb-ldjw702RfQA",
+      authDomain: "esquinaskaraokev1.firebaseapp.com",
+      projectId: "esquinaskaraokev1",
+      storageBucket: "esquinaskaraokev1.firebasestorage.app",
+      messagingSenderId: "194647687582",
+      appId: "1:194647687582:web:b40633b8af522f9e71968f"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    // Obter mesa da URL
+    const mesaId = new URLSearchParams(window.location.search).get("mesa");
+    if (!mesaId) {
+      alert("Mesa não identificada na URL.");
+      throw new Error("Mesa não definida.");
+    }
+
+    const buscaInput = document.getElementById("busca");
+    const btn = document.getElementById("adicionarBtn");
+    const lista = document.getElementById("fila");
+    let suasMusicas = [];
+
+    const mesaRef = collection(db, "mesas", mesaId, "suasMusicas");
+    const q = query(mesaRef, orderBy("dataHora"));
+
+    onSnapshot(q, (snapshot) => {
+      suasMusicas = [];
+      lista.innerHTML = "";
+      snapshot.forEach(doc => {
+        const m = doc.data();
+        suasMusicas.push(m);
+        const li = document.createElement("li");
+        li.textContent = m.titulo;
+        lista.appendChild(li);
+      });
+      btn.disabled = suasMusicas.length >= 2;
+    });
+
+    // Clique no botão "Adicionar Música"
+    btn.addEventListener("click", async () => {
+      const nome = buscaInput.value.trim();
+      if (!nome || suasMusicas.length >= 2) return;
+
+      btn.disabled = true;
+      btn.textContent = "Buscando...";
+
+      try {
+        const res = await fetch(`/api/buscar-video?q=${encodeURIComponent(nome)}`);
+        const json = await res.json();
+
+        if (!json.youtubeId) {
+          alert("Nenhum vídeo válido encontrado.");
+          btn.disabled = false;
+          btn.textContent = "Adicionar Música";
+          return;
+        }
+
+        await addDoc(mesaRef, {
+          youtubeId: json.youtubeId,
+          titulo: json.titulo,
+          dataHora: new Date()
+        });
+
+        buscaInput.value = "";
+      } catch (err) {
+        alert("Erro ao adicionar música.");
+        console.error(err);
+      }
+
+      btn.textContent = "Adicionar Música";
+      btn.disabled = false;
+    });
+
+    // Ativar botão quando digitar algo
+    buscaInput.addEventListener("input", () => {
+      btn.disabled = !buscaInput.value.trim() || suasMusicas.length >= 2;
+    });
+  </script>
+</body>
+</html>

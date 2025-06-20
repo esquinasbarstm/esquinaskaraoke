@@ -37,7 +37,7 @@
   <div class="musica-atual">
     <h2>🎶 Tocando Agora</h2>
     <p id="musicaAtual">Carregando...</p>
-    <button onclick="tocarProxima()">▶️ Tocar próxima da fila</button>
+    <button id="tocarBtn">▶️ Tocar próxima da fila</button>
   </div>
 
   <div class="fila">
@@ -45,42 +45,48 @@
     <ol id="filaRodizio"></ol>
   </div>
 
-  <!-- Firebase -->
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js"></script>
+  <!-- Firebase Modular -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+    import {
+      getFirestore, collection, doc, getDoc, getDocs, query, orderBy,
+      setDoc, onSnapshot, where
+    } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
-  <script>
     const firebaseConfig = {
-  apiKey: "AIzaSyA-12uLmsJocr0l7kPfDZb-ldjw702RfQA",
-  authDomain: "esquinaskaraokev1.firebaseapp.com",
-  projectId: "esquinaskaraokev1",
-  storageBucket: "esquinaskaraokev1.firebasestorage.app",
-  messagingSenderId: "194647687582",
-  appId: "1:194647687582:web:b40633b8af522f9e71968f"
-};
-    const app = firebase.initializeApp(firebaseConfig);
-    const db = firebase.firestore();
+      apiKey: "AIzaSyA-12uLmsJocr0l7kPfDZb-ldjw702RfQA",
+      authDomain: "esquinaskaraokev1.firebaseapp.com",
+      projectId: "esquinaskaraokev1",
+      storageBucket: "esquinaskaraokev1.firebasestorage.app",
+      messagingSenderId: "194647687582",
+      appId: "1:194647687582:web:b40633b8af522f9e71968f"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
 
     const filaEl = document.getElementById("filaRodizio");
     const musicaAtualEl = document.getElementById("musicaAtual");
+    const tocarBtn = document.getElementById("tocarBtn");
 
     let filaRodizio = [];
 
-    // Função que organiza a fila por rodízio
+    // Organiza a fila por rodízio de até 2 músicas por mesa
     async function organizarFila() {
-      const mesasSnap = await db.collection("mesas").get();
+      const mesasSnap = await getDocs(collection(db, "mesas"));
       const mesas = [];
 
-      for (const doc of mesasSnap.docs) {
-        const mesaId = doc.id;
-        const musicasSnap = await db.collection("mesas").doc(mesaId).collection("suasMusicas").orderBy("dataHora").get();
+      for (const docMesa of mesasSnap.docs) {
+        const mesaId = docMesa.id;
+        const musicasRef = collection(db, "mesas", mesaId, "suasMusicas");
+        const musicasSnap = await getDocs(query(musicasRef, orderBy("dataHora")));
         const musicas = musicasSnap.docs.map(m => ({ ...m.data(), mesaId }));
         if (musicas.length > 0) {
           mesas.push({ mesaId, musicas });
         }
       }
 
-      // Organizar em rodízio de 2 por mesa
+      // Rodízio: 2 músicas por mesa, em camadas
       const rodizio = [];
       for (let i = 0; i < 2; i++) {
         mesas.forEach(mesa => {
@@ -92,28 +98,43 @@
 
       filaRodizio = rodizio;
       renderizarFila();
-      salvarFilaFirebase(rodizio);
+      await setDoc(doc(db, "sistema", "filaOrdenada"), { fila: rodizio });
     }
 
-    // Exibir fila na tela
     function renderizarFila() {
       filaEl.innerHTML = "";
-      filaRodizio.forEach((m, i) => {
+      filaRodizio.forEach((m) => {
         const li = document.createElement("li");
         li.textContent = `${m.titulo} (${m.mesaId})`;
         filaEl.appendChild(li);
       });
     }
 
-    // Salvar fila ordenada no Firestore
-    async function salvarFilaFirebase(fila) {
-      await db.collection("sistema").doc("filaOrdenada").set({ fila });
+    async function tocarProxima() {
+      if (filaRodizio.length === 0) {
+        alert("Fila vazia!");
+        return;
+      }
+
+      const proxima = filaRodizio.shift();
+
+      // Atualiza `musicaAtual`
+      await setDoc(doc(db, "sistema", "musicaAtual"), proxima);
+
+      // Remove do Firestore da mesa
+      const mesaRef = collection(db, "mesas", proxima.mesaId, "suasMusicas");
+      const snap = await getDocs(query(mesaRef, where("youtubeId", "==", proxima.youtubeId)));
+      snap.forEach(doc => doc.ref.delete());
+
+      // Atualiza fila salva
+      await setDoc(doc(db, "sistema", "filaOrdenada"), { fila: filaRodizio });
+      renderizarFila();
     }
 
-    // Mostrar a música atual
     function carregarMusicaAtual() {
-      db.collection("sistema").doc("musicaAtual").onSnapshot(doc => {
-        const m = doc.data();
+      const musicaAtualRef = doc(db, "sistema", "musicaAtual");
+      onSnapshot(musicaAtualRef, (docSnap) => {
+        const m = docSnap.data();
         if (m && m.titulo) {
           musicaAtualEl.textContent = `${m.titulo} (${m.mesaId})`;
         } else {
@@ -122,26 +143,9 @@
       });
     }
 
-    // Tocar a próxima da fila
-    async function tocarProxima() {
-      if (filaRodizio.length === 0) return alert("Fila vazia!");
+    tocarBtn.addEventListener("click", tocarProxima);
 
-      const proxima = filaRodizio.shift();
-
-      // Atualiza música atual
-      await db.collection("sistema").doc("musicaAtual").set(proxima);
-
-      // Remove do Firestore da mesa
-      const mesaRef = db.collection("mesas").doc(proxima.mesaId).collection("suasMusicas");
-      const snap = await mesaRef.where("youtubeId", "==", proxima.youtubeId).get();
-      snap.forEach(doc => doc.ref.delete());
-
-      // Atualiza fila salva e exibição
-      await salvarFilaFirebase(filaRodizio);
-      renderizarFila();
-    }
-
-    // Iniciar
+    // Inicialização
     carregarMusicaAtual();
     organizarFila();
     setInterval(organizarFila, 8000); // Atualiza a fila a cada 8s
