@@ -65,4 +65,7 @@ export default async function handler(req) {
     console.error('Erro na busca:', err);
     return new Response(JSON.stringify({ error: 'Erro interno' }), {
       status: 500,
-      headers: { 'Con
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+}
