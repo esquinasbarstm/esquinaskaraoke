@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Karaokê TV - Esquina's Bar</title>
+  <style>
+    body, html {
+      margin: 0;
+      padding: 0;
+      background-color: black;
+      color: white;
+      font-family: 'Segoe UI', sans-serif;
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #info {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      background-color: rgba(0, 0, 0, 0.6);
+      padding: 10px 20px;
+      border-radius: 10px;
+      font-size: 18px;
+    }
+
+    #player {
+      width: 100%;
+      height: 100%;
+      max-height: 90vh;
+    }
+  </style>
+</head>
+<body>
+  <div id="info">Aguardando música...</div>
+  <div id="player"></div>
+
+  <script src="https://www.youtube.com/iframe_api"></script>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+    import {
+      getFirestore, doc, onSnapshot
+    } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+    // Firebase config
+    const firebaseConfig = {
+      apiKey: "AIzaSyA-12uLmsJocr0l7kPfDZb-ldjw702RfQA",
+      authDomain: "esquinaskaraokev1.firebaseapp.com",
+      projectId: "esquinaskaraokev1",
+      storageBucket: "esquinaskaraokev1.firebasestorage.app",
+      messagingSenderId: "194647687582",
+      appId: "1:194647687582:web:b40633b8af522f9e71968f"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    let player;
+    let videoAtual = "";
+
+    // Aguarda o carregamento da API do YouTube
+    window.onYouTubeIframeAPIReady = () => {
+      player = new YT.Player("player", {
+        height: "100%",
+        width: "100%",
+        videoId: "",
+        playerVars: {
+          autoplay: 1,
+          controls: 1,
+          modestbranding: 1,
+          rel: 0,
+          showinfo: 0
+        },
+        events: {
+          onReady: () => {
+            document.getElementById("info").textContent = "🎤 Pronto para tocar!";
+          },
+          onStateChange: onPlayerStateChange,
+          onError: onPlayerError
+        }
+      });
+    };
+
+    function tocarVideo(videoId) {
+      if (player && player.loadVideoById && videoId) {
+        player.loadVideoById(videoId);
+      }
+    }
+
+    function onPlayerStateChange(event) {
+      if (event.data === YT.PlayerState.ENDED) {
+        document.getElementById("info").textContent = "🎵 Música finalizada. Aguardando próxima...";
+      }
+    }
+
+    function onPlayerError(event) {
+      console.error("Erro ao tocar vídeo:", event.data);
+      document.getElementById("info").textContent = "⚠️ Erro no vídeo. Pulando...";
+    }
+
+    // Monitora música atual
+    const musicaAtualRef = doc(db, "sistema", "musicaAtual");
+    onSnapshot(musicaAtualRef, (docSnap) => {
+      const data = docSnap.data();
+      if (data?.youtubeId && data.youtubeId !== videoAtual) {
+        videoAtual = data.youtubeId;
+        tocarVideo(data.youtubeId);
+        document.getElementById("info").textContent = `🎶 ${data.titulo} (Mesa ${data.mesaId})`;
+      }
+    });
+  </script>
+</body>
+</html>
