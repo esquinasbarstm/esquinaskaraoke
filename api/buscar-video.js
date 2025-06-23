@@ -1,71 +1,43 @@
-export const config = {
-  runtime: 'edge',
-};
+export default async function handler(req, res) {
+  const query = req.query.q;
 
-export default async function handler(req) {
+  if (!query) return res.status(400).json({ error: 'Consulta vazia' });
+
+  const API_KEY = 'AIzaSyDsdUMRJMx6NIaylLQPMZKkye3-m8DQwH8'; // sua nova chave
+  const searchTerm = `${query} karaoke`;
+
+  const searchURL = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&videoEmbeddable=true&maxResults=5&q=${encodeURIComponent(searchTerm)}&key=${API_KEY}`;
+
   try {
-    const { searchParams } = new URL(req.url);
-    const query = searchParams.get('q') || searchParams.get('musica');
+    const response = await fetch(searchURL);
+    const data = await response.json();
 
-    if (!query) {
-      return new Response(JSON.stringify({ error: 'Consulta vazia' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' },
-      });
-    }
+    const videos = data.items.filter(item => item.id.videoId);
 
-    const API_KEY = 'AIzaSyDsdUMRJMx6NIaylLQPMZKkye3-m8DQwH8';
-    const buscaUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&videoEmbeddable=true&maxResults=6&q=${encodeURIComponent(query + ' karaoke')}&key=${API_KEY}`;
+    if (!videos.length) return res.status(404).json({ error: 'Nenhum vídeo válido encontrado' });
 
-    const buscaResp = await fetch(buscaUrl);
-    const buscaJson = await buscaResp.json();
+    const ids = videos.map(v => v.id.videoId).join(',');
 
-    const videoIds = buscaJson.items.map(item => item.id.videoId).filter(Boolean);
-    if (!videoIds.length) {
-      return new Response(JSON.stringify({ error: 'Nenhum vídeo encontrado' }), {
-        status: 404,
-        headers: { 'Content-Type': 'application/json' },
-      });
-    }
+    const statsURL = `https://www.googleapis.com/youtube/v3/videos?part=statistics,status&id=${ids}&key=${API_KEY}`;
+    const statsRes = await fetch(statsURL);
+    const statsData = await statsRes.json();
 
-    const detalhesUrl = `https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics,status&id=${videoIds.join(',')}&key=${API_KEY}`;
-    const detalhesResp = await fetch(detalhesUrl);
-    const detalhesJson = await detalhesResp.json();
-
-    const candidatos = detalhesJson.items
-      .filter(item =>
-        item.status.embeddable &&
-        item.status.privacyStatus === 'public' &&
-        !item.snippet.liveBroadcastContent
-      )
-      .map(item => ({
-        youtubeId: item.id,
-        titulo: item.snippet.title,
-        viewCount: parseInt(item.statistics.viewCount || 0),
-        likeCount: parseInt(item.statistics.likeCount || 0)
+    const videoStats = statsData.items
+      .filter(v => v.status.embeddable && v.status.privacyStatus === "public")
+      .map(v => ({
+        videoId: v.id,
+        likes: parseInt(v.statistics.likeCount || "0"),
       }));
 
-    if (!candidatos.length) {
-      return new Response(JSON.stringify({ error: 'Nenhum vídeo válido' }), {
-        status: 404,
-        headers: { 'Content-Type': 'application/json' },
-      });
-    }
+    const bestVideo = videoStats.sort((a, b) => b.likes - a.likes)[0];
+    const info = videos.find(v => v.id.videoId === bestVideo.videoId);
 
-    const melhor = candidatos.sort((a, b) =>
-      (b.viewCount + b.likeCount) - (a.viewCount + a.likeCount)
-    )[0];
-
-    return new Response(JSON.stringify(melhor), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
+    res.json({
+      youtubeId: bestVideo.videoId,
+      titulo: info.snippet.title
     });
-
   } catch (err) {
-    console.error('Erro na busca:', err);
-    return new Response(JSON.stringify({ error: 'Erro interno' }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    console.error(err);
+    res.status(500).json({ error: 'Erro ao buscar vídeo' });
   }
 }
