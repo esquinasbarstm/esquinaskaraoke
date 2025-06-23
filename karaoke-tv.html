@@ -45,7 +45,8 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
     import {
-      getFirestore, doc, onSnapshot
+      getFirestore, doc, onSnapshot, getDoc, setDoc, collection,
+      query, where, getDocs, arrayUnion
     } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
     // Firebase config
@@ -61,8 +62,14 @@
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
 
+    const filaRef = doc(db, "sistema", "filaOrdenada");
+    const musicaAtualRef = doc(db, "sistema", "musicaAtual");
+    const historicoRef = doc(db, "sistema", "historico");
+
     let player;
     let videoAtual = "";
+    let fila = [];
+    let musicaAtualData = null;
 
     // Aguarda o carregamento da API do YouTube
     window.onYouTubeIframeAPIReady = () => {
@@ -93,25 +100,75 @@
       }
     }
 
+    async function finalizarMusica() {
+      const snapAtual = await getDoc(musicaAtualRef);
+      const musica = snapAtual.data();
+      if (!musica || !musica.youtubeId) return;
+
+      await setDoc(historicoRef,
+        { lista: arrayUnion({ ...musica, finalizadaEm: new Date() }) },
+        { merge: true }
+      );
+
+      const filaSnap = await getDoc(filaRef);
+      let filaAtual = filaSnap.data()?.fila || [];
+      if (filaAtual.length && filaAtual[0].youtubeId === musica.youtubeId) {
+        filaAtual.shift();
+        await setDoc(filaRef, { fila: filaAtual });
+      }
+
+      if (musica.mesaId) {
+        const q = query(
+          collection(db, "mesas", musica.mesaId, "suasMusicas"),
+          where("youtubeId", "==", musica.youtubeId)
+        );
+        const docs = await getDocs(q);
+        docs.forEach(d => d.ref.delete());
+      }
+
+      if (filaAtual.length) {
+        await setDoc(musicaAtualRef, filaAtual[0]);
+      } else {
+        await setDoc(musicaAtualRef, {});
+      }
+    }
+
     function onPlayerStateChange(event) {
       if (event.data === YT.PlayerState.ENDED) {
         document.getElementById("info").textContent = "🎵 Música finalizada. Aguardando próxima...";
+        finalizarMusica();
       }
     }
 
     function onPlayerError(event) {
       console.error("Erro ao tocar vídeo:", event.data);
       document.getElementById("info").textContent = "⚠️ Erro no vídeo. Pulando...";
+      finalizarMusica();
     }
 
+    // Observa a fila
+    onSnapshot(filaRef, (snap) => {
+      fila = snap.data()?.fila || [];
+      if (!musicaAtualData?.youtubeId && fila.length) {
+        setDoc(musicaAtualRef, fila[0]);
+      }
+    });
+
     // Monitora música atual
-    const musicaAtualRef = doc(db, "sistema", "musicaAtual");
     onSnapshot(musicaAtualRef, (docSnap) => {
-      const data = docSnap.data();
-      if (data?.youtubeId && data.youtubeId !== videoAtual) {
-        videoAtual = data.youtubeId;
-        tocarVideo(data.youtubeId);
-        document.getElementById("info").textContent = `🎶 ${data.titulo} (Mesa ${data.mesaId})`;
+      musicaAtualData = docSnap.data();
+      if (musicaAtualData?.youtubeId) {
+        if (musicaAtualData.youtubeId !== videoAtual) {
+          videoAtual = musicaAtualData.youtubeId;
+          tocarVideo(videoAtual);
+        }
+        document.getElementById("info").textContent = `🎶 ${musicaAtualData.titulo} (Mesa ${musicaAtualData.mesaId})`;
+      } else {
+        document.getElementById("info").textContent = "Aguardando música...";
+        videoAtual = "";
+        if (fila.length) {
+          setDoc(musicaAtualRef, fila[0]);
+        }
       }
     });
   </script>
