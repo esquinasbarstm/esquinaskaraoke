@@ -46,7 +46,7 @@
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
     import {
       getFirestore, doc, onSnapshot, getDoc, setDoc, collection,
-      query, where, getDocs, arrayUnion
+      query, where, getDocs, arrayUnion, orderBy
     } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
     // Firebase config
@@ -126,11 +126,47 @@
         docs.forEach(d => d.ref.delete());
       }
 
+      await atualizarFilaGlobal();
+
       if (filaAtual.length) {
         await setDoc(musicaAtualRef, filaAtual[0]);
       } else {
         await setDoc(musicaAtualRef, {});
       }
+    }
+
+    async function atualizarFilaGlobal() {
+      const mesasSnap = await getDocs(collection(db, "mesas"));
+      const mesas = [];
+      for (const mesa of mesasSnap.docs) {
+        const musicasSnap = await getDocs(query(
+          collection(db, "mesas", mesa.id, "suasMusicas"),
+          orderBy("dataHora")
+        ));
+        mesas.push({
+          mesaId: mesa.id,
+          musicas: musicasSnap.docs.map(d => d.data())
+        });
+      }
+
+      let fila = [];
+      let idx = 0;
+      let restante = true;
+      while (restante) {
+        restante = false;
+        for (const m of mesas) {
+          for (let i = 0; i < 2; i++) {
+            const musica = m.musicas[idx + i];
+            if (musica) {
+              fila.push({ mesaId: m.mesaId, ...musica });
+              restante = true;
+            }
+          }
+        }
+        idx += 2;
+      }
+
+      await setDoc(filaRef, { fila });
     }
 
     function onPlayerStateChange(event) {
@@ -171,6 +207,8 @@
         }
       }
     });
+
+    atualizarFilaGlobal();
   </script>
 </body>
 </html>
