@@ -60,7 +60,8 @@
   <!-- Firebase Modular -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-    import { getFirestore, collection, doc, query, orderBy, onSnapshot, addDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+    import { getFirestore, collection, doc, query, orderBy, onSnapshot,
+      addDoc, deleteDoc, getDocs, setDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
     // Configuração Firebase
     const firebaseConfig = {
@@ -93,20 +94,64 @@
     onSnapshot(q, (snapshot) => {
       suasMusicas = [];
       lista.innerHTML = "";
-      snapshot.forEach(doc => {
-        const m = doc.data();
+      snapshot.forEach(docSnap => {
+        const m = { id: docSnap.id, ...docSnap.data() };
         suasMusicas.push(m);
         const li = document.createElement("li");
         li.textContent = m.titulo;
+        const del = document.createElement("button");
+        del.textContent = "Excluir";
+        del.style.marginLeft = "10px";
+        del.addEventListener("click", () => excluirMusica(m.id));
+        li.appendChild(del);
         lista.appendChild(li);
       });
-      btn.disabled = suasMusicas.length >= 2;
+      btn.disabled = suasMusicas.length >= 4;
     });
+
+    async function excluirMusica(id) {
+      await deleteDoc(doc(db, "mesas", mesaId, "suasMusicas", id));
+      atualizarFilaGlobal();
+    }
+
+    async function atualizarFilaGlobal() {
+      const mesasSnap = await getDocs(collection(db, "mesas"));
+      const mesas = [];
+      for (const mesa of mesasSnap.docs) {
+        const musicasSnap = await getDocs(query(
+          collection(db, "mesas", mesa.id, "suasMusicas"),
+          orderBy("dataHora")
+        ));
+        mesas.push({
+          mesaId: mesa.id,
+          musicas: musicasSnap.docs.map(d => d.data())
+        });
+      }
+
+      let fila = [];
+      let idx = 0;
+      let restante = true;
+      while (restante) {
+        restante = false;
+        for (const m of mesas) {
+          for (let i = 0; i < 2; i++) {
+            const musica = m.musicas[idx + i];
+            if (musica) {
+              fila.push({ mesaId: m.mesaId, ...musica });
+              restante = true;
+            }
+          }
+        }
+        idx += 2;
+      }
+
+      await setDoc(doc(db, "sistema", "filaOrdenada"), { fila });
+    }
 
     // Clique no botão "Adicionar Música"
     btn.addEventListener("click", async () => {
       const nome = buscaInput.value.trim();
-      if (!nome || suasMusicas.length >= 2) return;
+      if (!nome || suasMusicas.length >= 4) return;
 
       btn.disabled = true;
       btn.textContent = "Buscando...";
@@ -127,6 +172,7 @@
           titulo: json.titulo,
           dataHora: new Date()
         });
+        atualizarFilaGlobal();
 
         buscaInput.value = "";
       } catch (err) {
@@ -140,7 +186,7 @@
 
     // Ativar botão quando digitar algo
     buscaInput.addEventListener("input", () => {
-      btn.disabled = !buscaInput.value.trim() || suasMusicas.length >= 2;
+      btn.disabled = !buscaInput.value.trim() || suasMusicas.length >= 4;
     });
   </script>
 </body>

@@ -44,7 +44,7 @@
   <div class="musica-atual">
     <h2>🎶 Tocando Agora</h2>
     <p id="musicaAtual">Carregando...</p>
-    <button id="tocarBtn">▶️ Tocar próxima da fila</button>
+    <button id="tocarBtn">▶️ Pular / Próxima</button>
   </div>
 
   <div class="fila">
@@ -57,7 +57,7 @@
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
     import {
       getFirestore, doc, getDoc, setDoc, onSnapshot, getDocs,
-      query, where, collection
+      query, where, collection, arrayUnion, orderBy
     } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
     const firebaseConfig = {
@@ -111,34 +111,96 @@
       });
     }
 
+  async function finalizarMusicaAtual() {
+      const musicaSnap = await getDoc(doc(db, "sistema", "musicaAtual"));
+      const musica = musicaSnap.data();
+      if (!musica || !musica.youtubeId) return;
+
+      await setDoc(doc(db, "sistema", "historico"),
+        { lista: arrayUnion({ ...musica, finalizadaEm: new Date() }) },
+        { merge: true }
+      );
+
+      const filaSnap = await getDoc(doc(db, "sistema", "filaOrdenada"));
+      let filaAtual = filaSnap.data()?.fila || [];
+      if (filaAtual.length && filaAtual[0].youtubeId === musica.youtubeId) {
+        filaAtual.shift();
+        await setDoc(doc(db, "sistema", "filaOrdenada"), { fila: filaAtual });
+      }
+
+      if (musica.mesaId) {
+        const q = query(
+          collection(db, "mesas", musica.mesaId, "suasMusicas"),
+          where("youtubeId", "==", musica.youtubeId)
+        );
+        const docs = await getDocs(q);
+        docs.forEach(d => d.ref.delete());
+      }
+
+      await atualizarFilaGlobal();
+
+      if (filaAtual.length) {
+        await setDoc(doc(db, "sistema", "musicaAtual"), filaAtual[0]);
+      } else {
+        await setDoc(doc(db, "sistema", "musicaAtual"), {});
+      }
+    }
+
+    async function atualizarFilaGlobal() {
+      const mesasSnap = await getDocs(collection(db, "mesas"));
+      const mesas = [];
+      for (const mesa of mesasSnap.docs) {
+        const musicasSnap = await getDocs(query(
+          collection(db, "mesas", mesa.id, "suasMusicas"),
+          orderBy("dataHora")
+        ));
+        mesas.push({
+          mesaId: mesa.id,
+          musicas: musicasSnap.docs.map(d => d.data())
+        });
+      }
+
+      let fila = [];
+      let idx = 0;
+      let restante = true;
+      while (restante) {
+        restante = false;
+        for (const m of mesas) {
+          for (let i = 0; i < 2; i++) {
+            const musica = m.musicas[idx + i];
+            if (musica) {
+              fila.push({ mesaId: m.mesaId, ...musica });
+              restante = true;
+            }
+          }
+        }
+        idx += 2;
+      }
+
+      await setDoc(doc(db, "sistema", "filaOrdenada"), { fila });
+    }
+
     // ▶️ Tocar a próxima
     async function tocarProxima() {
       if (!filaRodizio.length) {
         alert("Fila vazia!");
         return;
       }
-
-      const proxima = filaRodizio.shift();
-
-      // Salvar como atual
-      await setDoc(doc(db, "sistema", "musicaAtual"), proxima);
-
-      // Remover da coleção da mesa
-      const snap = await getDocs(query(
-        collection(db, "mesas", proxima.mesaId, "suasMusicas"),
-        where("youtubeId", "==", proxima.youtubeId)
-      ));
-      snap.forEach(doc => doc.ref.delete());
-
-      // Atualizar fila no Firestore
-      await setDoc(doc(db, "sistema", "filaOrdenada"), { fila: filaRodizio });
+      const atualSnap = await getDoc(doc(db, "sistema", "musicaAtual"));
+      const atual = atualSnap.data();
+      if (!atual || !atual.youtubeId) {
+        await setDoc(doc(db, "sistema", "musicaAtual"), filaRodizio[0]);
+      } else {
+        await finalizarMusicaAtual();
+      }
     }
 
     tocarBtn.addEventListener("click", tocarProxima);
 
     // 🚀 Inicialização
-    monitorarFila();
-    monitorarMusicaAtual();
+      monitorarFila();
+      monitorarMusicaAtual();
+      atualizarFilaGlobal();
   </script>
 </body>
 </html>
