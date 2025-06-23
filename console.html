@@ -12,7 +12,9 @@
       padding: 20px;
       color: #333;
     }
+
     h1 { margin-bottom: 20px; }
+
     .fila, .musica-atual {
       background: white;
       padding: 20px;
@@ -20,6 +22,7 @@
       box-shadow: 0 2px 12px rgba(0,0,0,0.1);
       margin-bottom: 30px;
     }
+
     button {
       padding: 10px 20px;
       background: #ff0080;
@@ -49,10 +52,11 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
     import {
-      getFirestore, collection, doc, getDoc, getDocs, query, orderBy,
+      getFirestore, collection, doc, getDocs, query, orderBy,
       setDoc, onSnapshot, where
     } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
+    // 🔧 Configuração Firebase
     const firebaseConfig = {
       apiKey: "AIzaSyA-12uLmsJocr0l7kPfDZb-ldjw702RfQA",
       authDomain: "esquinaskaraokev1.firebaseapp.com",
@@ -65,60 +69,64 @@
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
 
+    // 🔄 Elementos
     const filaEl = document.getElementById("filaRodizio");
     const musicaAtualEl = document.getElementById("musicaAtual");
     const tocarBtn = document.getElementById("tocarBtn");
 
     let filaRodizio = [];
 
-    // Organiza a fila por rodízio de até 2 músicas por mesa
+    // 🔁 Atualiza a fila com base nas músicas das mesas
     async function organizarFila() {
       const mesasSnap = await getDocs(collection(db, "mesas"));
       const mesas = [];
 
-      for (const docMesa of mesasSnap.docs) {
-        const mesaId = docMesa.id;
-        const musicasRef = collection(db, "mesas", mesaId, "suasMusicas");
-        const musicasSnap = await getDocs(query(musicasRef, orderBy("dataHora")));
-        const musicas = musicasSnap.docs.map(m => ({ ...m.data(), mesaId }));
-        if (musicas.length > 0) {
+      for (const mesa of mesasSnap.docs) {
+        const mesaId = mesa.id;
+        const musicasSnap = await getDocs(
+          query(collection(db, "mesas", mesaId, "suasMusicas"), orderBy("dataHora"))
+        );
+        const musicas = musicasSnap.docs.map(doc => ({ ...doc.data(), mesaId }));
+        if (musicas.length) {
           mesas.push({ mesaId, musicas });
         }
       }
 
-      // Rodízio: 2 músicas por mesa, em camadas
-      const rodizio = [];
+      // Rodízio: até 2 músicas por mesa
+      const novaFila = [];
       for (let i = 0; i < 2; i++) {
         mesas.forEach(mesa => {
           if (mesa.musicas[i]) {
-            rodizio.push(mesa.musicas[i]);
+            novaFila.push(mesa.musicas[i]);
           }
         });
       }
 
-      filaRodizio = rodizio;
+      filaRodizio = novaFila;
+      await setDoc(doc(db, "sistema", "filaOrdenada"), { fila: filaRodizio });
       renderizarFila();
-      await setDoc(doc(db, "sistema", "filaOrdenada"), { fila: rodizio });
     }
 
+    // 🖥️ Exibir a fila na tela
     function renderizarFila() {
       filaEl.innerHTML = "";
-      filaRodizio.forEach((m) => {
+      filaRodizio.forEach(m => {
         const li = document.createElement("li");
         li.textContent = `${m.titulo} (${m.mesaId})`;
         filaEl.appendChild(li);
       });
     }
 
+    // ▶️ Tocar a próxima música
     async function tocarProxima() {
-      if (filaRodizio.length === 0) {
+      if (!filaRodizio.length) {
         alert("Fila vazia!");
         return;
       }
 
       const proxima = filaRodizio.shift();
 
-      // Atualiza `musicaAtual`
+      // Define como música atual
       await setDoc(doc(db, "sistema", "musicaAtual"), proxima);
 
       // Remove do Firestore da mesa
@@ -126,26 +134,28 @@
       const snap = await getDocs(query(mesaRef, where("youtubeId", "==", proxima.youtubeId)));
       snap.forEach(doc => doc.ref.delete());
 
-      // Atualiza fila salva
+      // Atualiza fila salva e renderiza
       await setDoc(doc(db, "sistema", "filaOrdenada"), { fila: filaRodizio });
       renderizarFila();
     }
 
+    // 🎵 Atualiza a exibição da música atual em tempo real
     function carregarMusicaAtual() {
-      const musicaAtualRef = doc(db, "sistema", "musicaAtual");
-      onSnapshot(musicaAtualRef, (docSnap) => {
-        const m = docSnap.data();
-        if (m && m.titulo) {
-          musicaAtualEl.textContent = `${m.titulo} (${m.mesaId})`;
+      const ref = doc(db, "sistema", "musicaAtual");
+      onSnapshot(ref, (docSnap) => {
+        const data = docSnap.data();
+        if (data && data.titulo) {
+          musicaAtualEl.textContent = `${data.titulo} (${data.mesaId})`;
         } else {
           musicaAtualEl.textContent = "Nenhuma música tocando.";
         }
       });
     }
 
+    // ▶️ Ação do botão
     tocarBtn.addEventListener("click", tocarProxima);
 
-    // Inicialização
+    // 🚀 Inicialização
     carregarMusicaAtual();
     organizarFila();
     setInterval(organizarFila, 8000); // Atualiza a fila a cada 8s
