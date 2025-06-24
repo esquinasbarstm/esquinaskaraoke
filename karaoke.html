@@ -115,7 +115,7 @@
         const res = await fetch(`/api/buscar-video?q=${encodeURIComponent(nome)}`);
         const json = await res.json();
 
-        if (!json.youtubeId) {
+        if (!json.videoId) {
           alert("Nenhum vídeo válido encontrado.");
           btn.disabled = false;
           btn.textContent = "Adicionar Música";
@@ -123,7 +123,7 @@
         }
 
         await addDoc(mesaRef, {
-          youtubeId: json.youtubeId,
+          youtubeId: json.videoId,
           titulo: json.titulo,
           dataHora: new Date()
         });
