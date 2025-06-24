@@ -1,40 +1,56 @@
 export default async function handler(req, res) {
   const query = req.query.q;
 
-  if (!query) return res.status(400).json({ error: 'Consulta vazia' });
+  if (!query) {
+    return res.status(400).json({ error: 'Consulta vazia' });
+  }
 
-  const API_KEY = 'AIzaSyDsdUMRJMx6NIaylLQPMZKkye3-m8DQwH8'; // sua nova chave
+  const API_KEY = 'AIzaSyDsdUMRJMx6NIaylLQPMZKkye3-m8DQwH8'; // chave do YouTube
   const searchTerm = `${query} karaoke`;
 
-  const searchURL = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&videoEmbeddable=true&maxResults=5&q=${encodeURIComponent(searchTerm)}&key=${API_KEY}`;
+  // Busca inicial no YouTube priorizando vídeos mais assistidos
+  const searchURL =
+    `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video` +
+    `&videoEmbeddable=true&maxResults=10&order=viewCount&q=${encodeURIComponent(searchTerm)}` +
+    `&key=${API_KEY}`;
 
   try {
-    const response = await fetch(searchURL);
-    const data = await response.json();
+    const searchRes = await fetch(searchURL);
+    const searchData = await searchRes.json();
 
-    const videos = data.items.filter(item => item.id.videoId);
+    // Filtra apenas IDs de vídeos não listados como lives
+    const ids = searchData.items
+      .filter(item => item.id.videoId && item.snippet.liveBroadcastContent === 'none')
+      .map(item => item.id.videoId)
+      .join(',');
 
-    if (!videos.length) return res.status(404).json({ error: 'Nenhum vídeo válido encontrado' });
+    if (!ids) {
+      return res.status(404).json({ error: 'Nenhum vídeo válido encontrado' });
+    }
 
-    const ids = videos.map(v => v.id.videoId).join(',');
+    // Recupera detalhes para checar privacidade e incorporabilidade
+    const detailsURL = `https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics,status&id=${ids}&key=${API_KEY}`;
+    const detailsRes = await fetch(detailsURL);
+    const detailsData = await detailsRes.json();
 
-    const statsURL = `https://www.googleapis.com/youtube/v3/videos?part=statistics,status&id=${ids}&key=${API_KEY}`;
-    const statsRes = await fetch(statsURL);
-    const statsData = await statsRes.json();
+    const candidatos = detailsData.items.filter(
+      v => v.status.embeddable && v.status.privacyStatus === 'public'
+    );
 
-    const videoStats = statsData.items
-      .filter(v => v.status.embeddable && v.status.privacyStatus === "public")
-      .map(v => ({
-        videoId: v.id,
-        likes: parseInt(v.statistics.likeCount || "0"),
-      }));
+    if (!candidatos.length) {
+      return res.status(404).json({ error: 'Nenhum vídeo válido encontrado' });
+    }
 
-    const bestVideo = videoStats.sort((a, b) => b.likes - a.likes)[0];
-    const info = videos.find(v => v.id.videoId === bestVideo.videoId);
+    // Ordena por número de visualizações (maior para menor)
+    const melhor = candidatos.sort(
+      (a, b) => parseInt(b.statistics.viewCount || '0') - parseInt(a.statistics.viewCount || '0')
+    )[0];
 
     res.json({
-      youtubeId: bestVideo.videoId,
-      titulo: info.snippet.title
+      videoId: melhor.id,
+      titulo: melhor.snippet.title,
+      canal: melhor.snippet.channelTitle,
+      thumbnail: melhor.snippet.thumbnails.high?.url || melhor.snippet.thumbnails.default.url
     });
   } catch (err) {
     console.error(err);
