@@ -4,15 +4,25 @@
   <meta charset="UTF-8">
   <title>TV - Esquina's Karaoke</title>
   <link rel="stylesheet" href="style.css">
+
+  <!-- Script do YouTube Player API -->
   <script src="https://www.youtube.com/iframe_api"></script>
 </head>
 <body>
   <div class="container">
     <h1>TV - Esquina's Karaoke</h1>
+
+    <!-- Player do YouTube -->
     <div id="player"></div>
+
+    <!-- Música atual -->
     <p id="atual"></p>
+
+    <!-- Preview da próxima música -->
     <div id="proxima" class="video-preview hidden"></div>
   </div>
+
+  <!-- Firebase e script principal -->
   <script type="module" src="scripts/firebase-init.js"></script>
   <script type="module" src="scripts/karaoke-tv.js"></script>
 </body>
