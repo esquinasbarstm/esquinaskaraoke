@@ -1,4 +1,19 @@
 import { db } from './firebase-init.js';
+const PASSWORD = 'console123';
+if (localStorage.getItem('console') !== 'ok') {
+  const pw = prompt('Senha do console:');
+  if (pw !== PASSWORD) {
+    alert('Senha incorreta');
+    document.body.innerHTML = 'Acesso negado';
+    throw new Error('Senha incorreta');
+  }
+  localStorage.setItem('console', 'ok');
+}
+
+const atualEl = document.getElementById('musica-atual');
+const proximaEl = document.getElementById('proxima');
+  atualEl.textContent = arr[0] ? `Tocando: ${arr[0].nome} (Mesa ${arr[0].mesa})` : '';
+  proximaEl.textContent = arr[1] ? `Próxima: ${arr[1].nome} (Mesa ${arr[1].mesa})` : '';
  nkvhl0-codex/criar-sistema-de-karaokê-online
 import { doc, getDoc, updateDoc, setDoc, onSnapshot, arrayRemove } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 

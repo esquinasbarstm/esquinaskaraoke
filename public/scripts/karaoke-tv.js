@@ -1,5 +1,32 @@
 import { db } from './firebase-init.js';
- nkvhl0-codex/criar-sistema-de-karaokê-online
+import { doc, getDoc, setDoc, updateDoc, onSnapshot, arrayRemove, arrayUnion } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+const proximaEl = document.getElementById('proxima');
+const historicoDoc = doc(db, 'sistema', 'historico');
+
+function mostrarProxima(arr) {
+  const next = arr[0];
+  if (next) {
+    proximaEl.innerHTML = `<img src="${next.thumb}" alt=""> <div>${next.nome} (Mesa ${next.mesa})</div>`;
+    proximaEl.classList.remove('hidden');
+  } else {
+    proximaEl.classList.add('hidden');
+  }
+}
+      mostrarProxima(arr.slice(1));
+  await updateDoc(historicoDoc, { musicas: arrayUnion(current) }, { merge: true });
+  const histSnap = await getDoc(historicoDoc);
+  const histArr = histSnap.data()?.musicas || [];
+  if (histArr.length > 10) {
+    histArr.splice(0, histArr.length - 10);
+    await setDoc(historicoDoc, { musicas: histArr });
+  }
+    mostrarProxima(arr.slice(1));
+    proximaEl.classList.add('hidden');
+onSnapshot(filaDoc, (snap) => {
+  const arr = snap.data()?.musicas || [];
+  mostrarProxima(arr.slice(1));
+});
+
 import { doc, getDoc, setDoc, updateDoc, onSnapshot, arrayRemove } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
 let player;

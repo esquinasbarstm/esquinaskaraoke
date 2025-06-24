@@ -2,6 +2,35 @@ import { db } from './firebase-init.js';
 import { doc, setDoc, updateDoc, getDoc, onSnapshot, arrayUnion } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 import { searchVideo } from './youtube.js';
 
+function rodizio(arr) {
+  const grupos = {};
+  const ordem = [];
+  arr.forEach(s => {
+    if (!grupos[s.mesa]) {
+      grupos[s.mesa] = [];
+      ordem.push(s.mesa);
+    }
+    grupos[s.mesa].push(s);
+  });
+  const resultado = [];
+  let resto = true;
+  while (resto) {
+    resto = false;
+    ordem.forEach(m => {
+      const g = grupos[m];
+      if (g.length) {
+        resultado.push(g.shift());
+        resto = resto || g.length > 0;
+        if (g.length) {
+          resultado.push(g.shift());
+          resto = resto || g.length > 0;
+        }
+      }
+    });
+  }
+  return resultado;
+}
+
 const PASSWORD = 'garcom123';
 if (localStorage.getItem('garcom') !== 'ok') {
   const pw = prompt('Senha do garçom:');
@@ -17,6 +46,8 @@ const form = document.getElementById('form-garcom');
 const inputMesa = document.getElementById('mesa');
 const inputBusca = document.getElementById('busca');
 const lista = document.getElementById('historico');
+const rankingEl = document.getElementById('ranking');
+const historicoDoc = doc(db, 'sistema', 'historico');
 
 form.addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -39,16 +70,18 @@ form.addEventListener('submit', async (e) => {
     await setDoc(mesaDoc, { musicas: [] }, { merge: true });
     await updateDoc(mesaDoc, { musicas: arrayUnion(song) });
     const filaSnap = await getDoc(filaDoc);
+    let arr = filaSnap.exists() ? filaSnap.data().musicas || [] : [];
+    const count = arr.filter(m => m.mesa === mesa).length;
+    if (count >= 2) {
+      alert('Mesa já possui 2 músicas na fila');
+      return;
+    }
+    arr.push(song);
+    arr = rodizio(arr);
     if (!filaSnap.exists()) {
-      await setDoc(filaDoc, { musicas: [song] });
+      await setDoc(filaDoc, { musicas: arr });
     } else {
-      const arr = filaSnap.data().musicas || [];
-      const count = arr.filter(m => m.mesa === mesa).length;
-      if (count >= 2) {
-        alert('Mesa já possui 2 músicas na fila');
-        return;
-      }
-      await updateDoc(filaDoc, { musicas: arrayUnion(song) });
+      await updateDoc(filaDoc, { musicas: arr });
     }
     inputBusca.value = '';
   } catch (err) {
@@ -79,3 +112,22 @@ function listenMesa(mesa) {
     });
   });
 }
+
+function updateRanking() {
+  onSnapshot(historicoDoc, (snap) => {
+    const arr = snap.data()?.musicas || [];
+    const contagem = {};
+    arr.forEach(m => {
+      contagem[m.nome] = (contagem[m.nome] || 0) + 1;
+    });
+    const itens = Object.entries(contagem).sort((a,b) => b[1]-a[1]).slice(0,5);
+    rankingEl.innerHTML = '';
+    itens.forEach(([nome, qtd]) => {
+      const li = document.createElement('li');
+      li.textContent = `${nome} - ${qtd}`;
+      rankingEl.appendChild(li);
+    });
+  });
+}
+
+updateRanking();
