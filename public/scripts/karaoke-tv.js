@@ -1,95 +1,93 @@
 import { db } from './firebase-init.js';
 import {
   doc,
-  getDoc,
   onSnapshot,
   updateDoc,
+  arrayUnion,
+  getDoc,
   setDoc
 } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
-const filaDoc = doc(db, 'sistema', 'filaOrdenada');
-const atualDoc = doc(db, 'sistema', 'musicaAtual');
-const atualEl = document.getElementById('atual');
-const proximaEl = document.getElementById('proxima');
-
 let player;
-let filaAtual = [];
-let tocandoAgora = null;
+let musicaAtual = null;
+let fila = [];
 
-// Inicialização do YouTube Player
+// Inicia o player após API do YouTube carregar
 window.onYouTubeIframeAPIReady = () => {
   player = new YT.Player('player', {
     height: '390',
     width: '640',
     videoId: '',
     events: {
-      onReady: () => {
-        iniciarMonitoramento(); // só inicia Firebase depois do player
-      },
+      onReady: () => console.log('Player pronto'),
       onStateChange: onPlayerStateChange
-    },
-    playerVars: {
-      autoplay: 1,
-      controls: 0,
-      modestbranding: 1,
-      rel: 0
     }
   });
 };
 
+// Quando música termina, toca a próxima
+function onPlayerStateChange(event) {
+  if (event.data === YT.PlayerState.ENDED) {
+    encerrarAtual();
+    tocarProxima();
+  }
+}
+
+// Encerra música atual: remove da fila e salva no histórico
+async function encerrarAtual() {
+  if (!musicaAtual) return;
+
+  const historicoRef = doc(db, 'sistema', 'historico');
+  await updateDoc(historicoRef, {
+    musicas: arrayUnion(musicaAtual)
+  });
+
+  // Remove da mesa
+  const mesaRef = doc(db, 'mesas', musicaAtual.mesa);
+  const mesaSnap = await getDoc(mesaRef);
+  const lista = mesaSnap.data()?.musicas || [];
+  const novaLista = lista.filter(m => m.id !== musicaAtual.id);
+  await updateDoc(mesaRef, { musicas: novaLista });
+
+  // Remove da fila
+  const filaRef = doc(db, 'sistema', 'filaOrdenada');
+  fila = fila.filter(m => m.id !== musicaAtual.id);
+  await setDoc(filaRef, { musicas: fila });
+
+  musicaAtual = null;
+  document.getElementById('atual').textContent = '';
+}
+
+// Carrega vídeo no player e atualiza visual
 function tocarProxima() {
-  if (!filaAtual.length) {
-    player.stopVideo();
-    atualEl.textContent = 'Nenhuma música na fila';
-    proximaEl.innerHTML = '';
+  if (!fila.length) {
+    document.getElementById('atual').textContent = 'Fila vazia';
     return;
   }
 
-  const [atual, proxima] = filaAtual;
+  const prox = fila[0];
+  musicaAtual = prox;
 
-  tocandoAgora = atual;
-  if (atual?.youtubeId) {
-    player.loadVideoById(atual.youtubeId);
-    setDoc(atualDoc, atual);
-    atualEl.textContent = `🎤 Tocando: ${atual.nome} (Mesa ${atual.mesa})`;
+  try {
+    player.loadVideoById(prox.youtubeId);
+    document.getElementById('atual').textContent = `Tocando: ${prox.nome} (Mesa ${prox.mesa})`;
+  } catch (err) {
+    console.error('Erro ao carregar vídeo:', err);
+    encerrarAtual();
+    tocarProxima(); // tenta o próximo
+  }
+}
+
+// Atualiza a fila em tempo real
+const filaRef = doc(db, 'sistema', 'filaOrdenada');
+onSnapshot(filaRef, (snap) => {
+  const novaFila = snap.data()?.musicas || [];
+
+  // Se mudou a primeira música da fila e player não está tocando, atualiza
+  if (!musicaAtual || (novaFila[0]?.id !== musicaAtual.id)) {
+    fila = novaFila;
+    tocarProxima();
   } else {
-    atualEl.textContent = 'Erro: vídeo inválido';
+    fila = novaFila; // apenas atualiza
   }
-
-  if (proxima) {
-    proximaEl.innerHTML = `
-      <p>🎶 Próxima: ${proxima.nome} (Mesa ${proxima.mesa})</p>
-      <img src="${proxima.thumb}" alt="thumbnail" width="200">
-    `;
-    proximaEl.classList.remove('hidden');
-  } else {
-    proximaEl.innerHTML = '';
-    proximaEl.classList.add('hidden');
-  }
-}
-
-async function avancarFila() {
-  filaAtual.shift();
-  await updateDoc(filaDoc, { musicas: filaAtual });
-  tocarProxima();
-}
-
-function onPlayerStateChange(event) {
-  if (event.data === YT.PlayerState.ENDED) {
-    avancarFila();
-  }
-}
-
-function iniciarMonitoramento() {
-  onSnapshot(filaDoc, (snap) => {
-    const data = snap.data();
-    filaAtual = data?.musicas || [];
-
-    if (
-      !tocandoAgora ||
-      (filaAtual.length && filaAtual[0]?.id !== tocandoAgora?.id)
-    ) {
-      tocarProxima();
-    }
-  });
-}
+});
