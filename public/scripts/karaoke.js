@@ -21,20 +21,19 @@ form.addEventListener('submit', async (e) => {
   if (!query) return;
   try {
     const video = await searchVideo(query);
-    const song = {
+    const base = {
       id: Date.now().toString(),
       nome: video.title,
       youtubeId: video.youtubeId,
       mesa,
-      horario: Date.now(),
-      channel: video.channel,
-      thumb: video.thumb
+      horario: Date.now()
     };
+    const song = { ...base, channel: video.channel, thumb: video.thumb };
     await setDoc(mesaDoc, { musicas: [] }, { merge: true });
     await updateDoc(mesaDoc, { musicas: arrayUnion(song) });
     const filaSnap = await getDoc(filaDoc);
     if (!filaSnap.exists()) {
-      await setDoc(filaDoc, { musicas: [song] });
+      await setDoc(filaDoc, { musicas: [base] });
     } else {
       const arr = filaSnap.data().musicas || [];
       const count = arr.filter(m => m.mesa === mesa).length;
@@ -42,7 +41,7 @@ form.addEventListener('submit', async (e) => {
         alert('Aguarde suas músicas tocarem antes de adicionar mais.');
         return;
       }
-      await updateDoc(filaDoc, { musicas: arrayUnion(song) });
+      await updateDoc(filaDoc, { musicas: arrayUnion(base) });
     }
     input.value = '';
   } catch (err) {

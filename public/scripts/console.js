@@ -1,9 +1,43 @@
 import { db } from './firebase-init.js';
-import { doc, getDoc, updateDoc, setDoc, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+import { doc, getDoc, updateDoc, setDoc, onSnapshot, arrayRemove } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
 const filaDoc = doc(db, 'sistema', 'filaOrdenada');
 const atualDoc = doc(db, 'sistema', 'musicaAtual');
 const lista = document.getElementById('fila');
+
+function rodizio(arr) {
+  const grupos = {};
+  const ordem = [];
+  arr.forEach(s => {
+    if (!grupos[s.mesa]) {
+      grupos[s.mesa] = [];
+      ordem.push(s.mesa);
+    }
+    grupos[s.mesa].push(s);
+  });
+  const resultado = [];
+  let resto = true;
+  while (resto) {
+    resto = false;
+    ordem.forEach(m => {
+      const g = grupos[m];
+      if (g.length) {
+        resultado.push(g.shift());
+        resto = resto || g.length > 0;
+        if (g.length) {
+          resultado.push(g.shift());
+          resto = resto || g.length > 0;
+        }
+      }
+    });
+  }
+  return resultado;
+}
+
+async function salvarFila(arr) {
+  arr = rodizio(arr);
+  await updateDoc(filaDoc, { musicas: arr });
+}
 
 async function render() {
   const filaSnap = await getDoc(filaDoc);
@@ -40,7 +74,7 @@ async function tocarAgora(id) {
   if (idx > -1) {
     const [song] = arr.splice(idx, 1);
     arr.unshift(song);
-    await updateDoc(filaDoc, { musicas: arr });
+    await salvarFila(arr);
     await setDoc(atualDoc, song);
   }
 }
@@ -48,15 +82,24 @@ async function tocarAgora(id) {
 async function remover(id) {
   const filaSnap = await getDoc(filaDoc);
   let arr = filaSnap.data()?.musicas || [];
-  arr = arr.filter(s => s.id !== id);
-  await updateDoc(filaDoc, { musicas: arr });
+  const idx = arr.findIndex(s => s.id === id);
+  if (idx > -1) {
+    const [song] = arr.splice(idx, 1);
+    await salvarFila(arr);
+    const mesaDoc = doc(db, 'mesas', song.mesa);
+    await updateDoc(mesaDoc, { musicas: arrayRemove(song) });
+  }
 }
 
 async function pular() {
   const filaSnap = await getDoc(filaDoc);
   let arr = filaSnap.data()?.musicas || [];
-  arr.shift();
-  await updateDoc(filaDoc, { musicas: arr });
+  const song = arr.shift();
+  await salvarFila(arr);
+  if (song) {
+    const mesaDoc = doc(db, 'mesas', song.mesa);
+    await updateDoc(mesaDoc, { musicas: arrayRemove(song) });
+  }
   await setDoc(atualDoc, arr[0] || {});
 }
 
