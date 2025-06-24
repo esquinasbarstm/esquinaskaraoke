@@ -131,9 +131,9 @@
         await setDoc(filaRef, { fila: filaAtual });
       }
 
-      if (musica.mesaId) {
+      if (musica.mesa) {
         const q = query(
-          collection(db, "mesas", musica.mesaId, "suasMusicas"),
+          collection(db, "mesas", musica.mesa, "suasMusicas"),
           where("youtubeId", "==", musica.youtubeId)
         );
         const docs = await getDocs(q);
@@ -181,7 +181,7 @@
           videoAtual = musicaAtualData.youtubeId;
           iniciarPlayer(videoAtual);
         }
-        document.getElementById("info").textContent = `🎶 ${musicaAtualData.titulo} (Mesa ${musicaAtualData.mesaId})`;
+        document.getElementById("info").textContent = `🎶 ${musicaAtualData.nome} (Mesa ${musicaAtualData.mesa})`;
       } else {
         document.getElementById("info").textContent = "Aguardando música...";
         videoAtual = "";

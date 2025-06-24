@@ -94,7 +94,7 @@
       filaRodizio.forEach((m, i) => {
         const li = document.createElement("li");
         const span = document.createElement("span");
-        span.textContent = `${i + 1}. ${m.titulo} (mesa ${m.mesaId})`;
+        span.textContent = `${i + 1}. ${m.nome} (mesa ${m.mesa})`;
         const btn = document.createElement("button");
         btn.textContent = "🗑️ Remover";
         btn.style.marginLeft = "10px";
@@ -110,8 +110,8 @@
       const ref = doc(db, "sistema", "musicaAtual");
       onSnapshot(ref, (docSnap) => {
         const data = docSnap.data();
-        if (data?.titulo) {
-          musicaAtualEl.textContent = `${data.titulo} (mesa ${data.mesaId})`;
+        if (data?.nome) {
+          musicaAtualEl.textContent = `${data.nome} (mesa ${data.mesa})`;
         } else {
           musicaAtualEl.textContent = "Nenhuma música tocando.";
         }
@@ -135,9 +135,9 @@
         await setDoc(doc(db, "sistema", "filaOrdenada"), { fila: filaAtual });
       }
 
-      if (musica.mesaId) {
+      if (musica.mesa) {
         const q = query(
-          collection(db, "mesas", musica.mesaId, "suasMusicas"),
+          collection(db, "mesas", musica.mesa, "suasMusicas"),
           where("youtubeId", "==", musica.youtubeId)
         );
         const docs = await getDocs(q);
@@ -157,9 +157,9 @@
       filaAtual.splice(index, 1);
       await setDoc(doc(db, "sistema", "filaOrdenada"), { fila: filaAtual });
 
-      if (musica.mesaId) {
+      if (musica.mesa) {
         const q = query(
-          collection(db, "mesas", musica.mesaId, "suasMusicas"),
+          collection(db, "mesas", musica.mesa, "suasMusicas"),
           where("youtubeId", "==", musica.youtubeId)
         );
         const docs = await getDocs(q);
