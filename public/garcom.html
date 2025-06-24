@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8">
+<title>Garçom - Esquina's Karaoke</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="container">
+<h1>Painel do Garçom</h1>
+<form id="form-garcom">
+<input type="text" id="mesa" placeholder="Mesa" required>
+<input type="text" id="busca" placeholder="Música" required>
+<button type="submit">Adicionar</button>
+</form>
+<h2>Histórico</h2>
+<ul id="historico" class="list"></ul>
+<h2>Ranking</h2>
+<ul id="ranking" class="list"></ul>
+</div>
+<script type="module" src="scripts/firebase-init.js"></script>
+<script type="module" src="scripts/youtube.js"></script>
+<script type="module" src="scripts/garcom.js"></script>
+</body>
+</html>
