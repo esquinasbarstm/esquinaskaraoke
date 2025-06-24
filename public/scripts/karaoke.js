@@ -21,19 +21,34 @@ form.addEventListener('submit', async (e) => {
   if (!query) return;
   try {
     const video = await searchVideo(query);
+ nkvhl0-codex/criar-sistema-de-karaokê-online
     const base = {
+
+    const song = {
+ master
       id: Date.now().toString(),
       nome: video.title,
       youtubeId: video.youtubeId,
       mesa,
+ nkvhl0-codex/criar-sistema-de-karaokê-online
       horario: Date.now()
     };
     const song = { ...base, channel: video.channel, thumb: video.thumb };
+
+      horario: Date.now(),
+      channel: video.channel,
+      thumb: video.thumb
+    };
+ master
     await setDoc(mesaDoc, { musicas: [] }, { merge: true });
     await updateDoc(mesaDoc, { musicas: arrayUnion(song) });
     const filaSnap = await getDoc(filaDoc);
     if (!filaSnap.exists()) {
+ nkvhl0-codex/criar-sistema-de-karaokê-online
       await setDoc(filaDoc, { musicas: [base] });
+
+      await setDoc(filaDoc, { musicas: [song] });
+ master
     } else {
       const arr = filaSnap.data().musicas || [];
       const count = arr.filter(m => m.mesa === mesa).length;
@@ -41,7 +56,11 @@ form.addEventListener('submit', async (e) => {
         alert('Aguarde suas músicas tocarem antes de adicionar mais.');
         return;
       }
+ nkvhl0-codex/criar-sistema-de-karaokê-online
       await updateDoc(filaDoc, { musicas: arrayUnion(base) });
+
+      await updateDoc(filaDoc, { musicas: arrayUnion(song) });
+ master
     }
     input.value = '';
   } catch (err) {
