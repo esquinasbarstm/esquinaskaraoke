@@ -1,6 +1,7 @@
 import { db } from './firebase-init.js';
 import { doc, getDoc, updateDoc, setDoc, onSnapshot, arrayRemove } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
+// Proteção com senha
 const PASSWORD = 'console123';
 if (localStorage.getItem('console') !== 'ok') {
   const pw = prompt('Senha do console:');
@@ -57,10 +58,12 @@ async function render() {
   const arr = filaSnap.data()?.musicas || [];
   atualEl.textContent = arr[0] ? `Tocando: ${arr[0].nome} (Mesa ${arr[0].mesa})` : '';
   proximaEl.textContent = arr[1] ? `Próxima: ${arr[1].nome} (Mesa ${arr[1].mesa})` : '';
+
   lista.innerHTML = '';
   arr.forEach((m, idx) => {
     const li = document.createElement('li');
     if (idx === 0) li.style.fontWeight = 'bold';
+
     const preview = document.createElement('div');
     preview.className = 'video-preview';
     const img = document.createElement('img');
@@ -70,6 +73,7 @@ async function render() {
     preview.appendChild(img);
     preview.appendChild(info);
     li.appendChild(preview);
+
     const btnPlay = document.createElement('button');
     btnPlay.textContent = 'Tocar agora';
     btnPlay.onclick = () => tocarAgora(m.id);
@@ -78,6 +82,7 @@ async function render() {
     btnRem.onclick = () => remover(m.id);
     li.appendChild(btnPlay);
     li.appendChild(btnRem);
+
     lista.appendChild(li);
   });
 }
@@ -104,6 +109,7 @@ async function remover(id) {
     const mesaDoc = doc(db, 'mesas', song.mesa);
     await updateDoc(mesaDoc, { musicas: arrayRemove(song) });
   }
+  await setDoc(atualDoc, arr[0] || {});
 }
 
 async function pular() {
@@ -119,6 +125,5 @@ async function pular() {
 }
 
 document.getElementById('pular').onclick = pular;
-
 onSnapshot(filaDoc, render);
 render();

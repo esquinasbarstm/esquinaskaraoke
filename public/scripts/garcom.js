@@ -2,6 +2,7 @@ import { db } from './firebase-init.js';
 import { doc, setDoc, updateDoc, getDoc, onSnapshot, arrayUnion } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 import { searchVideo } from './youtube.js';
 
+// Função de rodízio por mesa (2 músicas por rodada)
 function rodizio(arr) {
   const grupos = {};
   const ordem = [];
@@ -31,6 +32,7 @@ function rodizio(arr) {
   return resultado;
 }
 
+// Proteção com senha
 const PASSWORD = 'garcom123';
 if (localStorage.getItem('garcom') !== 'ok') {
   const pw = prompt('Senha do garçom:');
@@ -42,6 +44,7 @@ if (localStorage.getItem('garcom') !== 'ok') {
   localStorage.setItem('garcom', 'ok');
 }
 
+// Elementos da interface
 const form = document.getElementById('form-garcom');
 const inputMesa = document.getElementById('mesa');
 const inputBusca = document.getElementById('busca');
@@ -49,11 +52,13 @@ const lista = document.getElementById('historico');
 const rankingEl = document.getElementById('ranking');
 const historicoDoc = doc(db, 'sistema', 'historico');
 
+// Submissão do formulário para adicionar música
 form.addEventListener('submit', async (e) => {
   e.preventDefault();
   const mesa = inputMesa.value.trim();
   const query = inputBusca.value.trim();
   if (!mesa || !query) return;
+
   try {
     const video = await searchVideo(query);
     const song = {
@@ -65,10 +70,13 @@ form.addEventListener('submit', async (e) => {
       channel: video.channel,
       thumb: video.thumb
     };
+
     const mesaDoc = doc(db, 'mesas', mesa);
     const filaDoc = doc(db, 'sistema', 'filaOrdenada');
+
     await setDoc(mesaDoc, { musicas: [] }, { merge: true });
     await updateDoc(mesaDoc, { musicas: arrayUnion(song) });
+
     const filaSnap = await getDoc(filaDoc);
     let arr = filaSnap.exists() ? filaSnap.data().musicas || [] : [];
     const count = arr.filter(m => m.mesa === mesa).length;
@@ -78,19 +86,23 @@ form.addEventListener('submit', async (e) => {
     }
     arr.push(song);
     arr = rodizio(arr);
+
     if (!filaSnap.exists()) {
       await setDoc(filaDoc, { musicas: arr });
     } else {
       await updateDoc(filaDoc, { musicas: arr });
     }
+
     inputBusca.value = '';
   } catch (err) {
     alert(err.message);
   }
 });
 
+// Atualiza o histórico da mesa ao trocar de número
 inputMesa.addEventListener('change', () => listenMesa(inputMesa.value));
 
+// Mostra o histórico da mesa em tempo real
 function listenMesa(mesa) {
   if (!mesa) return;
   const mesaDoc = doc(db, 'mesas', mesa);
@@ -113,6 +125,7 @@ function listenMesa(mesa) {
   });
 }
 
+// Ranking de músicas mais pedidas
 function updateRanking() {
   onSnapshot(historicoDoc, (snap) => {
     const arr = snap.data()?.musicas || [];
@@ -120,7 +133,9 @@ function updateRanking() {
     arr.forEach(m => {
       contagem[m.nome] = (contagem[m.nome] || 0) + 1;
     });
-    const itens = Object.entries(contagem).sort((a,b) => b[1]-a[1]).slice(0,5);
+    const itens = Object.entries(contagem)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5);
     rankingEl.innerHTML = '';
     itens.forEach(([nome, qtd]) => {
       const li = document.createElement('li');
