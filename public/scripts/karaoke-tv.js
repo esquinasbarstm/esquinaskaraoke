@@ -16,13 +16,16 @@ let player;
 let filaAtual = [];
 let tocandoAgora = null;
 
-function onYouTubeIframeAPIReady() {
+// Inicialização do YouTube Player
+window.onYouTubeIframeAPIReady = () => {
   player = new YT.Player('player', {
     height: '390',
     width: '640',
     videoId: '',
     events: {
-      onReady: () => tocarProxima(),
+      onReady: () => {
+        iniciarMonitoramento(); // só inicia Firebase depois do player
+      },
       onStateChange: onPlayerStateChange
     },
     playerVars: {
@@ -32,8 +35,7 @@ function onYouTubeIframeAPIReady() {
       rel: 0
     }
   });
-}
-window.onYouTubeIframeAPIReady = onYouTubeIframeAPIReady;
+};
 
 function tocarProxima() {
   if (!filaAtual.length) {
@@ -46,10 +48,13 @@ function tocarProxima() {
   const [atual, proxima] = filaAtual;
 
   tocandoAgora = atual;
-  player.loadVideoById(atual.youtubeId);
-
-  atualEl.textContent = `🎤 Tocando: ${atual.nome} (Mesa ${atual.mesa})`;
-  setDoc(atualDoc, atual);
+  if (atual?.youtubeId) {
+    player.loadVideoById(atual.youtubeId);
+    setDoc(atualDoc, atual);
+    atualEl.textContent = `🎤 Tocando: ${atual.nome} (Mesa ${atual.mesa})`;
+  } else {
+    atualEl.textContent = 'Erro: vídeo inválido';
+  }
 
   if (proxima) {
     proximaEl.innerHTML = `
@@ -64,7 +69,7 @@ function tocarProxima() {
 }
 
 async function avancarFila() {
-  filaAtual.shift(); // Remove a atual
+  filaAtual.shift();
   await updateDoc(filaDoc, { musicas: filaAtual });
   tocarProxima();
 }
@@ -75,11 +80,16 @@ function onPlayerStateChange(event) {
   }
 }
 
-// Monitoramento em tempo real da fila
-onSnapshot(filaDoc, (snap) => {
-  const data = snap.data();
-  filaAtual = data?.musicas || [];
-  if (!tocandoAgora || filaAtual.length && filaAtual[0].id !== tocandoAgora.id) {
-    tocarProxima();
-  }
-});
+function iniciarMonitoramento() {
+  onSnapshot(filaDoc, (snap) => {
+    const data = snap.data();
+    filaAtual = data?.musicas || [];
+
+    if (
+      !tocandoAgora ||
+      (filaAtual.length && filaAtual[0]?.id !== tocandoAgora?.id)
+    ) {
+      tocarProxima();
+    }
+  });
+}
