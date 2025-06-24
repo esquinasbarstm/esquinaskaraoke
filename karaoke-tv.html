@@ -71,34 +71,48 @@
     let fila = [];
     let musicaAtualData = null;
 
-    // Aguarda o carregamento da API do YouTube
-    window.onYouTubeIframeAPIReady = () => {
-      player = new YT.Player("player", {
-        height: "100%",
-        width: "100%",
-        videoId: "",
-        playerVars: {
-          autoplay: 1,
-          controls: 1,
-          modestbranding: 1,
-          rel: 0,
-          showinfo: 0
-        },
-        events: {
-          onReady: () => {
-            document.getElementById("info").textContent = "🎤 Pronto para tocar!";
+    function iniciarPlayer(videoId) {
+      if (!videoId) return;
+      const erro = localStorage.getItem("erroVideoId");
+      if (erro && erro === videoId) {
+        document.getElementById("info").textContent = "Erro ao carregar vídeo. Pulando...";
+        pularParaProximaMusica();
+        return;
+      }
+      localStorage.setItem("ultimoVideoIdTestado", videoId);
+      if (!player) {
+        player = new YT.Player("player", {
+          height: "100%",
+          width: "100%",
+          videoId,
+          playerVars: {
+            autoplay: 1,
+            controls: 1,
+            loop: 0,
+            modestbranding: 1
           },
-          onStateChange: onPlayerStateChange,
-          onError: onPlayerError
-        }
-      });
-    };
-
-    function tocarVideo(videoId) {
-      if (player && player.loadVideoById && videoId) {
+          events: {
+            onReady: (e) => {
+              localStorage.removeItem("erroVideoId");
+              e.target.playVideo();
+            },
+            onStateChange: onPlayerStateChange,
+            onError: onPlayerError
+          }
+        });
+      } else {
+        localStorage.removeItem("erroVideoId");
         player.loadVideoById(videoId);
+        player.playVideo();
       }
     }
+
+    // Aguarda o carregamento da API do YouTube
+    window.onYouTubeIframeAPIReady = () => {
+      if (musicaAtualData?.youtubeId) {
+        iniciarPlayer(musicaAtualData.youtubeId);
+      }
+    };
 
     async function finalizarMusica() {
       const snapAtual = await getDoc(musicaAtualRef);
@@ -133,6 +147,10 @@
       }
     }
 
+    async function pularParaProximaMusica() {
+      await finalizarMusica();
+    }
+
     function onPlayerStateChange(event) {
       if (event.data === YT.PlayerState.ENDED) {
         document.getElementById("info").textContent = "🎵 Música finalizada. Aguardando próxima...";
@@ -142,8 +160,9 @@
 
     function onPlayerError(event) {
       console.error("Erro ao tocar vídeo:", event.data);
-      document.getElementById("info").textContent = "⚠️ Erro no vídeo. Pulando...";
-      finalizarMusica();
+      localStorage.setItem("erroVideoId", videoAtual);
+      document.getElementById("info").textContent = "Erro ao carregar vídeo. Pulando...";
+      pularParaProximaMusica();
     }
 
     // Observa a fila
@@ -160,7 +179,7 @@
       if (musicaAtualData?.youtubeId) {
         if (musicaAtualData.youtubeId !== videoAtual) {
           videoAtual = musicaAtualData.youtubeId;
-          tocarVideo(videoAtual);
+          iniciarPlayer(videoAtual);
         }
         document.getElementById("info").textContent = `🎶 ${musicaAtualData.titulo} (Mesa ${musicaAtualData.mesaId})`;
       } else {

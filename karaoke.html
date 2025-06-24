@@ -60,7 +60,7 @@
   <!-- Firebase Modular -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-    import { getFirestore, collection, doc, query, orderBy, onSnapshot, addDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+    import { getFirestore, collection, doc, query, orderBy, onSnapshot, addDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
     // Configuração Firebase
     const firebaseConfig = {
@@ -93,11 +93,18 @@
     onSnapshot(q, (snapshot) => {
       suasMusicas = [];
       lista.innerHTML = "";
-      snapshot.forEach(doc => {
-        const m = doc.data();
+      snapshot.forEach(docSnap => {
+        const m = docSnap.data();
         suasMusicas.push(m);
         const li = document.createElement("li");
-        li.textContent = m.titulo;
+        const span = document.createElement("span");
+        span.textContent = m.titulo;
+        const removeBtn = document.createElement("button");
+        removeBtn.textContent = "❌";
+        removeBtn.style.marginLeft = "10px";
+        removeBtn.addEventListener("click", () => removerMusica(docSnap.id));
+        li.appendChild(span);
+        li.appendChild(removeBtn);
         lista.appendChild(li);
       });
       btn.disabled = suasMusicas.length >= 2;
@@ -142,6 +149,10 @@
     buscaInput.addEventListener("input", () => {
       btn.disabled = !buscaInput.value.trim() || suasMusicas.length >= 2;
     });
+
+    async function removerMusica(id) {
+      await deleteDoc(doc(db, "mesas", mesaId, "suasMusicas", id));
+    }
   </script>
 </body>
 </html>
