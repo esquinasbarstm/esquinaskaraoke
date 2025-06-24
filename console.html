@@ -93,7 +93,14 @@
       filaEl.innerHTML = "";
       filaRodizio.forEach((m, i) => {
         const li = document.createElement("li");
-        li.textContent = `${i + 1}. ${m.titulo} (mesa ${m.mesaId})`;
+        const span = document.createElement("span");
+        span.textContent = `${i + 1}. ${m.titulo} (mesa ${m.mesaId})`;
+        const btn = document.createElement("button");
+        btn.textContent = "🗑️ Remover";
+        btn.style.marginLeft = "10px";
+        btn.addEventListener("click", () => removerDaFila(i, m));
+        li.appendChild(span);
+        li.appendChild(btn);
         filaEl.appendChild(li);
       });
     }
@@ -141,6 +148,22 @@
         await setDoc(doc(db, "sistema", "musicaAtual"), filaAtual[0]);
       } else {
         await setDoc(doc(db, "sistema", "musicaAtual"), {});
+      }
+    }
+
+    async function removerDaFila(index, musica) {
+      const filaSnap = await getDoc(doc(db, "sistema", "filaOrdenada"));
+      const filaAtual = filaSnap.data()?.fila || [];
+      filaAtual.splice(index, 1);
+      await setDoc(doc(db, "sistema", "filaOrdenada"), { fila: filaAtual });
+
+      if (musica.mesaId) {
+        const q = query(
+          collection(db, "mesas", musica.mesaId, "suasMusicas"),
+          where("youtubeId", "==", musica.youtubeId)
+        );
+        const docs = await getDocs(q);
+        docs.forEach(d => d.ref.delete());
       }
     }
 
