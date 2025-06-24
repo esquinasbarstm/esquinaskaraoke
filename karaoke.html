@@ -60,7 +60,10 @@
   <!-- Firebase Modular -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-    import { getFirestore, collection, doc, query, orderBy, onSnapshot, addDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+    import {
+      getFirestore, collection, doc, query, orderBy, onSnapshot,
+      addDoc, deleteDoc, getDocs, setDoc, where
+    } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
     // Configuração Firebase
     const firebaseConfig = {
@@ -88,16 +91,23 @@
     let suasMusicas = [];
 
     const mesaRef = collection(db, "mesas", mesaId, "suasMusicas");
-    const q = query(mesaRef, orderBy("dataHora"));
+    const q = query(mesaRef, orderBy("horario"));
 
     onSnapshot(q, (snapshot) => {
       suasMusicas = [];
       lista.innerHTML = "";
-      snapshot.forEach(doc => {
-        const m = doc.data();
+      snapshot.forEach(docSnap => {
+        const m = docSnap.data();
         suasMusicas.push(m);
         const li = document.createElement("li");
-        li.textContent = m.titulo;
+        const span = document.createElement("span");
+        span.textContent = m.nome || m.titulo;
+        const removeBtn = document.createElement("button");
+        removeBtn.textContent = "❌";
+        removeBtn.style.marginLeft = "10px";
+        removeBtn.addEventListener("click", () => removerMusica(docSnap.id));
+        li.appendChild(span);
+        li.appendChild(removeBtn);
         lista.appendChild(li);
       });
       btn.disabled = suasMusicas.length >= 2;
@@ -122,11 +132,22 @@
           return;
         }
 
+        // Evita duplicatas na lista da mesa
+        const dup = await getDocs(query(mesaRef, where("youtubeId", "==", json.videoId)));
+        if (!dup.empty) {
+          alert("Essa música já está na fila da mesa.");
+          btn.disabled = false;
+          btn.textContent = "Adicionar Música";
+          return;
+        }
+
         await addDoc(mesaRef, {
           youtubeId: json.videoId,
-          titulo: json.titulo,
-          dataHora: new Date()
+          nome: json.titulo,
+          horario: new Date()
         });
+
+        await atualizarFilaGlobal();
 
         buscaInput.value = "";
       } catch (err) {
@@ -142,6 +163,40 @@
     buscaInput.addEventListener("input", () => {
       btn.disabled = !buscaInput.value.trim() || suasMusicas.length >= 2;
     });
+
+    async function removerMusica(id) {
+      await deleteDoc(doc(db, "mesas", mesaId, "suasMusicas", id));
+      await atualizarFilaGlobal();
+    }
+
+    async function atualizarFilaGlobal() {
+      const mesasSnap = await getDocs(collection(db, "mesas"));
+      const mesas = [];
+      for (const mesaDoc of mesasSnap.docs) {
+        const musicasSnap = await getDocs(query(
+          collection(db, "mesas", mesaDoc.id, "suasMusicas"),
+          orderBy("horario")
+        ));
+        const musicas = musicasSnap.docs.map(d => ({
+          id: d.id,
+          youtubeId: d.data().youtubeId,
+          nome: d.data().nome || d.data().titulo,
+          horario: d.data().horario || d.data().dataHora,
+          mesa: mesaDoc.id
+        }));
+        if (musicas.length) mesas.push({ mesaId: mesaDoc.id, musicas });
+      }
+      const fila = [];
+      for (let i = 0; i < 2; i++) {
+        mesas.forEach(m => {
+          if (m.musicas[i]) {
+            const { id, youtubeId, nome, horario } = m.musicas[i];
+            fila.push({ id, youtubeId, nome, horario, mesa: m.mesaId });
+          }
+        });
+      }
+      await setDoc(doc(db, "sistema", "filaOrdenada"), { fila });
+    }
   </script>
 </body>
 </html>
