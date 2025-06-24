@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8">
+<title>Mesa - Esquina's Karaoke</title>
+<link rel="stylesheet" href="style.css">
+<script src="https://www.youtube.com/iframe_api"></script>
+</head>
+<body>
+<div class="container">
+<h1>Mesa - Esquina's Karaoke</h1>
+<form id="form-busca">
+<input type="text" id="busca" placeholder="Nome da música" required>
+<button type="submit">Adicionar</button>
+</form>
+<h2>Suas músicas</h2>
+<ul id="suas-musicas" class="list"></ul>
+</div>
+<script type="module" src="scripts/firebase-init.js"></script>
+<script type="module" src="scripts/youtube.js"></script>
+<script type="module" src="scripts/karaoke.js"></script>
+</body>
+</html>
