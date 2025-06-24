@@ -70,9 +70,15 @@
     let videoAtual = "";
     let fila = [];
     let musicaAtualData = null;
+    let ytReady = false;
+    let pendingVideoId = "";
 
     function iniciarPlayer(videoId) {
       if (!videoId) return;
+      if (!ytReady) {
+        pendingVideoId = videoId;
+        return;
+      }
       const erro = localStorage.getItem("erroVideoId");
       if (erro && erro === videoId) {
         document.getElementById("info").textContent = "Erro ao carregar vídeo. Pulando...";
@@ -109,7 +115,11 @@
 
     // Aguarda o carregamento da API do YouTube
     window.onYouTubeIframeAPIReady = () => {
-      if (musicaAtualData?.youtubeId) {
+      ytReady = true;
+      if (pendingVideoId) {
+        iniciarPlayer(pendingVideoId);
+        pendingVideoId = "";
+      } else if (musicaAtualData?.youtubeId) {
         iniciarPlayer(musicaAtualData.youtubeId);
       }
     };
